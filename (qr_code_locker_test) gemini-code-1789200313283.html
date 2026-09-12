@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Life QR Control</title>
+  <!-- Librarii pentru QR Code Generation si Scanning -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 10px;
+      background-color: #f4f4f9;
+    }
+    .card {
+      background: white;
+      padding: 15px;
+      margin: 10px auto;
+      max-width: 400px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover { background-color: #0056b3; }
+    #reader { width: 100%; margin-top: 10px; }
+    #qrcode { display: flex; justify-content: center; margin-top: 10px; }
+    .status { margin-top: 10px; font-weight: bold; }
+    .success { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+
+  <h2>Locker Control Smart Life</h2>
+
+  <!-- SECTIUNE GENERARE QR -->
+  <div class="card">
+    <h3>1. Cod QR Activ</h3>
+    <button onclick="generareCodAleator()">Generează Cod Nou</button>
+    <p>Cod generat: <b id="codVal text">-</b></p>
+    <div id="qrcode"></div>
+  </div>
+
+  <!-- SECTIUNE SCANARE QR -->
+  <div class="card">
+    <h3>2. Scanare Cod QR</h3>
+    <button onclick="pornesteScanner()">Deschide Camera</button>
+    <div id="reader"></div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <script>
+    let codValidCurent = "";
+    let html5QrcodeScanner = null;
+
+    // Configurare API Smart Life / Tuya Webhook Endpoint
+    // Inlocuieste cu URL-ul tau de comanda (ex. Webhook local, Node-RED, Webhook Relay sau Cloud Function)
+    const SMART_LIFE_API_URL = "https://YOUR-SMARTLIFE-WEBHOOK-ENDPOINT.com/turn-on";
+
+    // 1. Generare Cod QR aleator
+    function generareCodAleator() {
+      // Generam un string aleator de 8 caractere
+      codValidCurent = Math.random().toString(36).substring(2, 10).toUpperCase();
+      document.getElementById("codVal text").innerText = codValidCurent;
+
+      // Curatam containerul si generam noul QR
+      const qrContainer = document.getElementById("qrcode");
+      qrContainer.innerHTML = "";
+      new QRCode(qrContainer, {
+        text: codValidCurent,
+        width: 150,
+        height: 150
+      });
+      
+      document.getElementById("status").innerText = "Cod nou generat! Gata pentru scanare.";
+      document.getElementById("status").className = "status";
+    }
+
+    // 2. Pornire Camera si Scanare
+    function pornesteScanner() {
+      if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear();
+      }
+
+      html5QrcodeScanner = new Html5QrcodeScanner(
+        "reader", 
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        /* verbose= */ false
+      );
+
+      html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    }
+
+    // 3. Callback la scanare cu succes
+    function onScanSuccess(decodedText, decodedResult) {
+      document.getElementById("status").innerText = `Cod detectat: ${decodedText}`;
+
+      if (codValidCurent === "") {
+        document.getElementById("status").innerText = "Generează mai întâi un cod valid!";
+        document.getElementById("status").className = "status error";
+        return;
+      }
+
+      if (decodedText === codValidCurent) {
+        document.getElementById("status").innerText = "MATCH OK! Trimit comanda catre Smart Life...";
+        document.getElementById("status").className = "status success";
+        
+        // Oprim scanner-ul dupa potrivire
+        html5QrcodeScanner.clear();
+
+        // Actionam intrerupatorul Smart Life
+        actioneazaSmartSwitch();
+      } else {
+        document.getElementById("status").innerText = "Cod Invalid! Codul scana nu se potrivește.";
+        document.getElementById("status").className = "status error";
+      }
+    }
+
+    function onScanFailure(error) {
+      // Eroare la citirea cadrelor fara QR - se ignora
+    }
+
+    // 4. Apel HTTP catre comanda Smart Life
+    async function actioneazaSmartSwitch() {
+      try {
+        const response = await fetch(SMART_LIFE_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ device_action: "on" })
+        });
+
+        if (response.ok) {
+          alert("Smart switch-ul a fost pornit cu succes!");
+        } else {
+          alert("Eroare la trimiterea comenzii catre Smart Life.");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Eroare de conexiune la API-ul Smart Life: " + err.message);
+      }
+    }
+
+    // Generam un cod implicit la prima incarcare a paginii
+    window.onload = generareCodAleator;
+  </script>
+</body>
+</html>
